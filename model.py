@@ -16,6 +16,7 @@ class TrackNet(nn.Module):
         super(TrackNet, self).__init__()
         self.vgg = self.make_vgg()
         self.deconv = self.make_deconv()
+        self.final = nn.Conv2d(in_channels=64, out_channels=1, kernel_size=3, padding=1, stride=1)
         
     def make_vgg(self):
         channels = [3, 64, 64, 128, 128, 128, 256, 256, 256, 512, 512, 512]
@@ -37,7 +38,7 @@ class TrackNet(nn.Module):
         return nn.Sequential(*layers)
     
     def make_deconv(self):
-        channels = [512, 512, 512, 512, 256, 256, 256, 128, 128, 128, 64, 64, 256]
+        channels = [512, 512, 512, 512, 256, 256, 256, 128, 128, 128, 64, 64, 64]
         layers = []
         for i in range(len(channels)-1):
             if i in [0, 4, 7]:
@@ -70,9 +71,9 @@ class TrackNet(nn.Module):
                 x = layer(x, indices)
             else:
                 x = layer(x)
-        x = F.softmax(x, dim=1)
+        #x = F.softmax(x, dim=1)
         #x, _ = torch.max(x, 1)
-        return x
+        return self.final(x)
 
 
 class BallCrossEntropy(nn.Module):

@@ -90,12 +90,12 @@ class ToTensor(object):
         image = image.transpose((2, 0, 1))
         target = target.transpose((0, 1))
         return {'image': torch.from_numpy(image).float(),
-                'target': torch.from_numpy(target).long()}
+                'target': torch.from_numpy(target).float()}
 
 def get_dataloader():
     ball_dataset = BallDataset(json_file='table-tenni-ball-tracking-export.json',
                            root_dir='../data/tracking_data/vott-json-export/',
                            transform=transforms.Compose([ToTensor()])
                           )
-    return DataLoader(ball_dataset, batch_size=1, shuffle=False, num_workers=0)
+    return DataLoader(ball_dataset, batch_size=2, shuffle=False, num_workers=0)
 

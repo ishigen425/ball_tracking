@@ -15,18 +15,17 @@ from utils.get_dataloader import get_dataloader
 
 cuda0 = torch.device('cuda:0')
 net = TrackNet().to(cuda0)
-criterion = BallCrossEntropy()
+criterion = nn.MSELoss()
 optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 train_data = get_dataloader()
 
-for epoch in range(10):  # loop over the dataset multiple times
+for epoch in range(300):  # loop over the dataset multiple times
 
     running_loss = 0.0
     for i, batch in enumerate(train_data):
         
         inputs = batch['image'].to(cuda0)
         target = batch['target'].to(cuda0)
-
         # 入力データと教師データのスタブ
         # inputs = torch.rand(1, 3, 360, 640).to(cuda0)
         # target = torch.rand(1, 360, 640).to(cuda0)
@@ -34,17 +33,15 @@ for epoch in range(10):  # loop over the dataset multiple times
         optimizer.zero_grad()
         # 損失の計算
         outputs = net(inputs)
-        # batch_size = outputs.size(0)
-        # heatmap_pred = outputs.reshape((batch_size, -1))
-        # heatmap_gt = target.reshape((batch_size, -1))
+        batch_size = outputs.size(0)
+        outputs = outputs.reshape((batch_size, -1))
+        target = target.reshape((batch_size, -1))
         loss = criterion(outputs, target)
         loss.backward()
         optimizer.step()
 
         # print statistics
         running_loss += loss.item()
-        if i % 50 == 49:    # print every 2000 mini-batches
-            print('[%d, %5d] loss: %.3f' %
-                  (epoch + 1, i + 1, running_loss / 50))
-            running_loss = 0.0
-            torch.save(net.state_dict(), 'weight/epoch_{}_{}'.format(epoch, i))
+    print('[%d, %5d] loss: %.3f' %
+            (epoch + 1, i + 1, running_loss / i))
+    torch.save(net.state_dict(), 'weight/epoch_{}_{}'.format(epoch, i))
