@@ -8,7 +8,6 @@ from torchvision import datasets, transforms
 import matplotlib.pyplot as plt
 import numpy as np
 import torchvision.models as models
-from utils.generate_heatmap import gaussian, make_gaussian
 import os, sys, json
 
 class TrackNet(nn.Module):
@@ -19,7 +18,7 @@ class TrackNet(nn.Module):
         self.final = nn.Conv2d(in_channels=64, out_channels=1, kernel_size=3, padding=1, stride=1)
         
     def make_vgg(self):
-        channels = [3, 64, 64, 128, 128, 128, 256, 256, 256, 512, 512, 512]
+        channels = [9, 64, 64, 128, 128, 128, 256, 256, 256, 512, 512, 512]
         layers = []
         for i in range(len(channels)-1):
             layers.append(nn.Conv2d(
