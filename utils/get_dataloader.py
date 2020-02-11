@@ -53,33 +53,34 @@ class BallDataset(Dataset):
     def __len__(self):
         return len(self.data_set)
 
-    def _get_image(self, path, shape):
-        image = Image.open(path).convert("RGB")
-        return np.asarray(image.resize(shape))
-
+    def _get_image(self, path):
+        return Image.open(path).convert("RGB")
     
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        output_size_w, output_size_h = (640, 360)
+        output_size = (360, 640)
         img_name = self.data_set[idx][0]
         center = self.data_set[idx][1]
-        image1 = self._get_image(img_name,(output_size_w, output_size_h))
+        image1 = self._get_image(img_name)
+        origin_size = (image1.height, image1.width)
+        image1 = np.asarray(image1.resize((output_size[1], output_size[0])))
         # idxが１以下の場合はオール0の画像を渡す
         if idx < 2:
-            image2 = np.zeros(image1.shape)
-            image3 = np.zeros(image1.shape)
+            image2 = np.zeros(output_size)
+            image3 = np.zeros(output_size)
         else:
-            image2 = self._get_image(self.data_set[idx-1][0],(output_size_w, output_size_h))
-            image3 = self._get_image(self.data_set[idx-2][0],(output_size_w, output_size_h))
+            image2 = np.asarray(self._get_image(self.data_set[idx-1][0]).resize((output_size[1], output_size[0])))
+            image3 = np.asarray(self._get_image(self.data_set[idx-2][0]).resize((output_size[1], output_size[0])))
         # チャネル方向にimageを結合
         image = np.dstack((image1, image2, image3))
-        x = y = 0
+        h = w = 0
         if center[0] != None:
-            x, y = center
-            x = (x/image.shape[0]) * output_size_h
-            y = (y/image.shape[1]) * output_size_w
-        heatmap = make_gaussian(size=(output_size_h, output_size_w), center=(x, y), is_ball=center[0] != None)
+            h, w = center
+            h = (h/origin_size[0]) * output_size[0]
+            w = (w/origin_size[1]) * output_size[1]
+        heatmap = make_gaussian(size=output_size, center=(h, w), is_ball=center[0] != None)
+        print('hetamap', heatmap.shape)
         data = {'image': image, 'target': heatmap}
         if self.transform:
             data = self.transform(data)
@@ -109,6 +110,7 @@ class RandomFlip(object):
         if random.random() < 0.5:
             image = np.flip(image, 2).copy()
             target = np.flip(target, 1).copy()
+        print('randomflip', image.shape, target.shape)
         return {'image': image, 'target': target}
 
 def get_dataloader():
