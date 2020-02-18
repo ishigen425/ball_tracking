@@ -73,20 +73,3 @@ class TrackNet(nn.Module):
         #x = F.softmax(x, dim=1)
         #x, _ = torch.max(x, 1)
         return self.final(x)
-
-
-class BallCrossEntropy(nn.Module):
-    def __init__(self):
-        super(BallCrossEntropy, self).__init__()
-        self.criterion = nn.CrossEntropyLoss()
-
-    def forward(self, output, target):
-        size_h = output.size(2)
-        size_w = output.size(3)
-        loss = 0
-        for h in range(size_h):
-            for w in range(size_w):
-                array_255 = output[:, :, h, w]
-                g = target[:, h, w]
-                loss += self.criterion(array_255, g)
-        return loss / (size_h * size_w)
