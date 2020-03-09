@@ -30,13 +30,13 @@ class BallDataset(Dataset):
         # filepathとcenterだけ抽出してリスト化する
         for idx, file_id in enumerate(j['assets']):
             asset = j['assets'][file_id]['asset']
-            self.data_set.append([os.path.join(root_dir, asset['name']), (None, None)])
             regions = j['assets'][file_id]['regions']
             if regions:
                 for info in regions:
+                    # ballが写っていないフレームは無視する
                     if 'ball' in info['tags']:
                         bbox = info['boundingBox']
-                        self.data_set[idx][1] = tuple(self.get_center(bbox['height'], bbox['width'], bbox['left'], bbox['top']))
+                        self.data_set.append([os.path.join(root_dir, asset['name']), tuple(self.get_center(bbox['height'], bbox['width'], bbox['left'], bbox['top']))])
         
     def get_center(self, height, width, top, left):
         top -= height / 2
@@ -55,23 +55,25 @@ class BallDataset(Dataset):
         output_size = (360, 640)
         img_name = self.data_set[idx][0]
         center = self.data_set[idx][1]
-        image1 = self._get_image(img_name)
-        origin_size = (image1.height, image1.width)
-        image1 = np.asarray(image1.resize((output_size[1], output_size[0])))
-        # idxが１以下の場合はオール0の画像を渡す
-        if idx < 2:
-            image2 = np.zeros((output_size[0], output_size[1], 3))
-            image3 = np.zeros((output_size[0], output_size[1], 3))
+        image2 = self._get_image(img_name)
+        origin_size = (image2.height, image2.width)
+        image2 = np.asarray(image2.resize((output_size[1], output_size[0])))
+        # 先頭または末尾のデータのときはallゼロの配列にする
+        if 0 < idx:
+            image1 = np.asarray(self._get_image(self.data_set[idx-1][0]).resize((output_size[1], output_size[0])))
         else:
-            image2 = np.asarray(self._get_image(self.data_set[idx-1][0]).resize((output_size[1], output_size[0])))
-            image3 = np.asarray(self._get_image(self.data_set[idx-2][0]).resize((output_size[1], output_size[0])))
+            image1 = np.zeros((output_size[0], output_size[1], 3))
+        if idx < len(self.data_set) - 1:
+            image3 = np.asarray(self._get_image(self.data_set[idx+1][0]).resize((output_size[1], output_size[0])))
+        else:
+            image3 = np.zeros((output_size[0], output_size[1], 3))
         # チャネル方向にimageを結合
         image = np.dstack((image1, image2, image3))
         h = w = 0
         if center[0] != None:
             h, w = center
-            h = (h/origin_size[0]) * output_size[0]
-            w = (w/origin_size[1]) * output_size[1]
+            h = (h/origin_size[0]) * output_size[0] // 1
+            w = (w/origin_size[1]) * output_size[1] // 1
         heatmap = make_gaussian(size=output_size, center=(h, w), is_ball=center[0] != None)
         data = {'image': image, 'target': heatmap}
         if self.transform:
@@ -120,13 +122,13 @@ def get_dataloader(batch_size):
                            ]))
     # 分割する
     n = len(ball_dataset)
-    # 20000件のデータでは学習が終わらなさそうなので、いくつか削る
-    train_size = int(n * 0.6)
-    test_size = n - train_size
-    train_dataset, test_dataset = torch.utils.data.random_split(ball_dataset, [train_size, test_size])
-    n = len(test_dataset)
+    # # 20000件のデータでは学習が終わらなさそうなので、いくつか削る
+    # train_size = int(n * 0.5)
+    # test_size = n - train_size
+    # train_dataset, test_dataset = torch.utils.data.random_split(ball_dataset, [train_size, test_size])
+    # n = len(test_dataset)
     train_size = int(n * 0.8)
     test_size = n - train_size
-    train_dataset, test_dataset = torch.utils.data.random_split(test_dataset, [train_size, test_size])
+    train_dataset, test_dataset = torch.utils.data.random_split(ball_dataset, [train_size, test_size])
     return DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0), DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=0)
 
