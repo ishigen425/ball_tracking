@@ -1,7 +1,7 @@
 import numpy as np
 
 def detect(heatmap):
-    heatmap_thread = np.where(heatmap < 128, 0, heatmap)
+    heatmap_thread = np.where(heatmap <128, 0, heatmap)
     return np.unravel_index(np.argmax(heatmap_thread), heatmap_thread.shape)
 
 def judge(target_heatmap, output_heatmap, sigma=10):

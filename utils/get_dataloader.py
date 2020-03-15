@@ -37,6 +37,7 @@ class BallDataset(Dataset):
                     if 'ball' in info['tags']:
                         bbox = info['boundingBox']
                         self.data_set.append([os.path.join(root_dir, asset['name']), tuple(self.get_center(bbox['height'], bbox['width'], bbox['left'], bbox['top']))])
+                        break
         
     def get_center(self, height, width, top, left):
         top -= height / 2

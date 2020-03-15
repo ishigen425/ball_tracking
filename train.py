@@ -9,23 +9,26 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torchvision.models as models
 import os, sys, json, datetime
-from model import TrackNet
+from models.track_net import TrackNet
 from utils.get_dataloader import get_dataloader
 from env import post_slack
 from utils.detector import judge
+#from models.unet_model import UNet
+from models.unet import UNet
 
 def write_log(path, context, mode="a"):
     with open(path, mode=mode) as f:
         f.writelines(context+"\n")
 
 cuda0 = torch.device('cuda:0')
-net = TrackNet().to(cuda0)
+#net = TrackNet().to(cuda0)
+net = UNet(9).to(cuda0)
 criterion = nn.MSELoss().to(cuda0)
 optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-train_data_laoder, test_data_loader = get_dataloader(batch_size=2)
+train_data_laoder, test_data_loader = get_dataloader(batch_size=4)
 write_log("weight/train.log", str(datetime.datetime.now()), "w")
 write_log("weight/train.log", "train start")
-
+print(net)
 for epoch in range(300):  # loop over the dataset multiple times
     # train phase
     running_loss = 0.0
@@ -40,6 +43,7 @@ for epoch in range(300):  # loop over the dataset multiple times
 
         optimizer.zero_grad()
         # 損失の計算
+
         outputs = net(inputs)
         batch_size = outputs.size(0)
         outputs = outputs.reshape((batch_size, -1))
