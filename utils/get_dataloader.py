@@ -53,7 +53,7 @@ class BallDataset(Dataset):
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        output_size = (360, 640)
+        output_size = (int(360*1.1), int(640*1.1))
         img_name = self.data_set[idx][0]
         center = self.data_set[idx][1]
         image2 = self._get_image(img_name)
@@ -73,8 +73,8 @@ class BallDataset(Dataset):
         h = w = 0
         if center[0] != None:
             h, w = center
-            h = (h/origin_size[0]) * output_size[0] // 1
-            w = (w/origin_size[1]) * output_size[1] // 1
+            h = int((h/origin_size[0]) * output_size[0])
+            w = int((w/origin_size[1]) * output_size[1])
         heatmap = make_gaussian(size=output_size, center=(h, w), is_ball=center[0] != None)
         data = {'image': image, 'target': heatmap}
         if self.transform:
@@ -99,15 +99,49 @@ class RandomFlip(object):
 
     def __call__(self, sample):
         image, target = sample['image'], sample['target']
+        # image, target H x W x C
         if random.random() < 0.5:
-            image = np.flip(image, 1).copy()
+            image = np.flip(image, 0).copy()
             target = np.flip(target, 0).copy()
         if random.random() < 0.5:
-            image = np.flip(image, 2).copy()
+            image = np.flip(image, 1).copy()
             target = np.flip(target, 1).copy()
         return {'image': image, 'target': target}
 
+class RandomCrop(object):
+    """Crop randomly the image in a sample.
+
+    Args:
+        output_size (tuple or int): Desired output size. If int, square crop
+            is made.
+    """
+
+    def __init__(self, output_size):
+        assert isinstance(output_size, (int, tuple))
+        if isinstance(output_size, int):
+            self.output_size = (output_size, output_size)
+        else:
+            assert len(output_size) == 2
+            self.output_size = output_size
+
+    def __call__(self, sample):
+        image, target = sample['image'], sample['target']
+
+        h, w = image.shape[:2]
+        new_h, new_w = self.output_size
+
+        top = np.random.randint(0, h - new_h)
+        left = np.random.randint(0, w - new_w)
+
+        image = image[top: top + new_h,
+                      left: left + new_w]
+
+        target = target[top: top + new_h,
+                      left: left + new_w]
+        return {'image': image, 'target': target}
+
 def get_dataloader(batch_size):
+    # local環境に合わせてるだけ。。。
     ball_dataset = BallDataset(
                             json_file_list=[
                             'vott-json-export/test2-export.json',
@@ -118,18 +152,13 @@ def get_dataloader(batch_size):
                             '../data/DJI_0015/',
                             ],
                            transform=transforms.Compose([
+                            RandomCrop((360, 640)),
                             RandomFlip(),
                             ToTensor()
                            ]))
     # 分割する
     n = len(ball_dataset)
-    # # 20000件のデータでは学習が終わらなさそうなので、いくつか削る
-    # train_size = int(n * 0.5)
-    # test_size = n - train_size
-    # train_dataset, test_dataset = torch.utils.data.random_split(ball_dataset, [train_size, test_size])
-    # n = len(test_dataset)
     train_size = int(n * 0.8)
     test_size = n - train_size
     train_dataset, test_dataset = torch.utils.data.random_split(ball_dataset, [train_size, test_size])
     return DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0), DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=0)
-
