@@ -53,7 +53,11 @@ class BallDataset(Dataset):
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
+<<<<<<< HEAD
         output_size = (int(360*1.5), int(640*1.5))
+=======
+        output_size = (int(360*1.1), int(640*1.1))
+>>>>>>> 96b4a10226fe47e8903cc6e716989b8a1a9100d4
         img_name = self.data_set[idx][0]
         center = self.data_set[idx][1]
         image2 = self._get_image(img_name)
@@ -73,8 +77,13 @@ class BallDataset(Dataset):
         h = w = 0
         if center[0] != None:
             h, w = center
+<<<<<<< HEAD
             h = int(h * output_size[0] / origin_size[0])
             w = int(w * output_size[1] / origin_size[1])
+=======
+            h = int((h/origin_size[0]) * output_size[0])
+            w = int((w/origin_size[1]) * output_size[1])
+>>>>>>> 96b4a10226fe47e8903cc6e716989b8a1a9100d4
         heatmap = make_gaussian(size=output_size, center=(h, w), is_ball=center[0] != None)
         data = {'image': image, 'target': heatmap}
         if self.transform:
