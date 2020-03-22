@@ -55,24 +55,16 @@ class BallDataset(Dataset):
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        output_size_w, output_size_h = (640, 360)
+        output_size = (int(360*1.5), int(640*1.5))
         img_name = self.data_set[idx][0]
         image = cv2.imread(img_name)
         center = self.data_set[idx][1]
         x = y = 0
         if center[0] != None:
-            x, y = center
-            x = (x/image.shape[0]) * output_size_h
-            y = (y/image.shape[1]) * output_size_w
-        heatmap = make_gaussian(size=(output_size_h, output_size_w), center=(x, y), is_ball=center[0] != None)
-        # ここでピクセル情報をone-hotで持つような3次元の行列を作成する
-        # target = np.zeros((256, output_size_h, output_size_w))
-        # for i in range(output_size_h):
-        #     for j in range(output_size_w):
-        #         k = heatmap[i, j]
-        #         target[int(k),i,j] = 1
-        image = cv2.resize(image, (output_size_w, output_size_h))
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            h, w = center
+            h = int(h * output_size[0] / origin_size[0])
+            w = int(w * output_size[1] / origin_size[1])
+        heatmap = make_gaussian(size=output_size, center=(h, w), is_ball=center[0] != None)
         data = {'image': image, 'target': heatmap}
         if self.transform:
             data = self.transform(data)
