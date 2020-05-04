@@ -15,13 +15,14 @@ from PIL import Image
 import random
 
 class BallDataset(Dataset):
-    def __init__(self, json_file_list, root_dir_list, transform=None):
+    def __init__(self, json_file_list, root_dir_list, interval=1,transform=None):
         self.data_set = []
         for i in range(len(json_file_list)):
             json_file, root_dir = json_file_list[i], root_dir_list[i]
             self.read_json(root_dir, json_file)
         self.data_set.sort()
         self.transform = transform
+        self.interval = interval
 
     def read_json(self, root_dir, json_file):
         with open(os.path.join(root_dir, json_file)) as f:
@@ -59,32 +60,17 @@ class BallDataset(Dataset):
         image2 = self._get_image(img_name)
         origin_size = (image2.height, image2.width)
         image2 = np.asarray(image2.resize((output_size[1], output_size[0])))
-        # 先頭または末尾のデータのときはallゼロの配列にする
-        if 0 < idx:
-            image1 = np.asarray(self._get_image(self.data_set[idx-1][0]).resize((output_size[1], output_size[0])))
-        else:
-            image1 = np.zeros((output_size[0], output_size[1], 3))
-        if idx < len(self.data_set) - 1:
-            image3 = np.asarray(self._get_image(self.data_set[idx+1][0]).resize((output_size[1], output_size[0])))
-        else:
-            image3 = np.zeros((output_size[0], output_size[1], 3))
+        image1_idx = idx-self.interval if idx-self.interval >= 0 else 0
+        image3_idx = idx+self.interval if idx+self.interval < len(self.data_set) else -1
+        image1 = np.asarray(self._get_image(self.data_set[image1_idx][0]).resize((output_size[1], output_size[0])))
+        image3 = np.asarray(self._get_image(self.data_set[image3_idx][0]).resize((output_size[1], output_size[0])))
         # チャネル方向にimageを結合
         image = np.dstack((image1, image2, image3))
         h = w = 0
         if center[0] != None:
             h, w = center
-<<<<<<< HEAD
-<<<<<<< HEAD
-            h = int(h * output_size[0] / origin_size[0])
-            w = int(w * output_size[1] / origin_size[1])
-=======
             h = int((h/origin_size[0]) * output_size[0])
             w = int((w/origin_size[1]) * output_size[1])
->>>>>>> 96b4a10226fe47e8903cc6e716989b8a1a9100d4
-=======
-            h = int((h/origin_size[0]) * output_size[0])
-            w = int((w/origin_size[1]) * output_size[1])
->>>>>>> 96b4a10226fe47e8903cc6e716989b8a1a9100d4
         heatmap = make_gaussian(size=output_size, center=(h, w), is_ball=center[0] != None)
         data = {'image': image, 'target': heatmap}
         if self.transform:
@@ -161,6 +147,7 @@ def get_dataloader(batch_size):
                             ['../data/DJI_0014/',
                             '../data/DJI_0015/',
                             ],
+                           interval=4,
                            transform=transforms.Compose([
                             RandomCrop((360, 640)),
                             RandomFlip(),

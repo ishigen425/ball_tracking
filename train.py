@@ -13,7 +13,6 @@ from models.track_net import TrackNet
 from utils.get_dataloader import get_dataloader
 from env import post_slack
 from utils.detector import judge
-#from models.unet_model import UNet
 from models.unet import UNet
 
 def write_log(path, context, mode="a"):
@@ -21,7 +20,6 @@ def write_log(path, context, mode="a"):
         f.writelines(context+"\n")
 
 cuda0 = torch.device('cuda:0')
-#net = TrackNet().to(cuda0)
 net = UNet(9).to(cuda0)
 criterion = nn.MSELoss().to(cuda0)
 optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
@@ -29,7 +27,7 @@ train_data_laoder, test_data_loader = get_dataloader(batch_size=4)
 write_log("weight/train.log", str(datetime.datetime.now()), "w")
 write_log("weight/train.log", "train start")
 print(net)
-for epoch in range(300):  # loop over the dataset multiple times
+for epoch in range(300):
     # train phase
     running_loss = 0.0
     net.train()
@@ -37,13 +35,8 @@ for epoch in range(300):  # loop over the dataset multiple times
         
         inputs = batch['image'].to(cuda0)
         target = batch['target'].to(cuda0)
-        # 入力データと教師データのスタブ
-        # inputs = torch.rand(1, 9, 360, 640).to(cuda0)
-        # target = torch.rand(1, 360, 640).to(cuda0)
 
         optimizer.zero_grad()
-        # 損失の計算
-
         outputs = net(inputs)
         batch_size = outputs.size(0)
         outputs = outputs.reshape((batch_size, -1))
