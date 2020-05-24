@@ -20,7 +20,7 @@ def write_log(path, context, mode="a"):
         f.writelines(context+"\n")
 
 cuda0 = torch.device('cuda:0')
-net = UNet(9).to(cuda0)
+net = UNet(27).to(cuda0)
 criterion = nn.MSELoss().to(cuda0)
 optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 train_data_laoder, test_data_loader = get_dataloader(batch_size=4)

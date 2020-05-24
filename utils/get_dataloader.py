@@ -13,37 +13,20 @@ import warnings
 from .generate_heatmap import make_gaussian
 from PIL import Image
 import random
+import glob
 
 class BallDataset(Dataset):
-    def __init__(self, json_file_list, root_dir_list, interval=1,transform=None):
+    def __init__(self, input_image_number,interval=1,transform=None):
         self.data_set = []
-        for i in range(len(json_file_list)):
-            json_file, root_dir = json_file_list[i], root_dir_list[i]
-            self.read_json(root_dir, json_file)
-        self.data_set.sort()
+        self.all_image = []
         self.transform = transform
         self.interval = interval
+        self.input_image_number = input_image_number
 
-    def read_json(self, root_dir, json_file):
-        with open(os.path.join(root_dir, json_file)) as f:
-            s = f.read()
-            j = json.loads(s)
-        # filepathとcenterだけ抽出してリスト化する
-        for idx, file_id in enumerate(j['assets']):
-            asset = j['assets'][file_id]['asset']
-            regions = j['assets'][file_id]['regions']
-            if regions:
-                for info in regions:
-                    # ballが写っていないフレームは無視する
-                    if 'ball' in info['tags']:
-                        bbox = info['boundingBox']
-                        self.data_set.append([os.path.join(root_dir, asset['name']), tuple(self.get_center(bbox['height'], bbox['width'], bbox['left'], bbox['top']))])
-                        break
-        
     def get_center(self, height, width, top, left):
         top -= height / 2
         left += width / 2
-        return left, top
+        return top, left
 
     def __len__(self):
         return len(self.data_set)
@@ -51,32 +34,42 @@ class BallDataset(Dataset):
     def _get_image(self, path):
         return Image.open(path).convert("RGB")
     
-    def __getitem__(self, idx):
-        if torch.is_tensor(idx):
-            idx = idx.tolist()
-        output_size = (int(360*1.5), int(640*1.5))
-        img_name = self.data_set[idx][0]
+    def _get_target_hetmap(self, idx, output_size):
+        target_image = self._get_image(self.data_set[idx][0])
         center = self.data_set[idx][1]
-        image2 = self._get_image(img_name)
-        origin_size = (image2.height, image2.width)
-        image2 = np.asarray(image2.resize((output_size[1], output_size[0])))
-        image1_idx = idx-self.interval if idx-self.interval >= 0 else 0
-        image3_idx = idx+self.interval if idx+self.interval < len(self.data_set) else -1
-        image1 = np.asarray(self._get_image(self.data_set[image1_idx][0]).resize((output_size[1], output_size[0])))
-        image3 = np.asarray(self._get_image(self.data_set[image3_idx][0]).resize((output_size[1], output_size[0])))
-        # チャネル方向にimageを結合
-        image = np.dstack((image1, image2, image3))
+        is_ball = center[0] != None
+        origin_size = (target_image.height, target_image.width)
         h = w = 0
-        if center[0] != None:
+        if is_ball:
             h, w = center
             h = int((h/origin_size[0]) * output_size[0])
             w = int((w/origin_size[1]) * output_size[1])
-        heatmap = make_gaussian(size=output_size, center=(h, w), is_ball=center[0] != None)
+        heatmap = make_gaussian(size=output_size, center=(h, w), is_ball=is_ball)
+        return heatmap
+    
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+        data_size = len(self.all_image)
+        img_idx = self.all_image.index(self.data_set[idx][0])
+        start, end = img_idx-(self.interval*self.input_image_number//2), img_idx+(self.interval*self.input_image_number//2)+1
+        output_size = (int(360*1.5), int(640*1.5))
+        idxs = [0] * max((0-start), 0)
+        ends = [0] * max((end-data_size), 0)
+        idxs.extend(range(max(0,start), min(data_size, end),self.interval))
+        idxs.extend(ends)
+        # チャネル方向にimageを結合
+        #image = np.dstack((image1, image2, image3))
+        image = np.dstack([
+            np.asarray(self._get_image(self.all_image[i]).resize((output_size[1], output_size[0])))
+            for i in idxs
+                        ])
+        heatmap = self._get_target_hetmap(idx, output_size)
         data = {'image': image, 'target': heatmap}
         if self.transform:
             data = self.transform(data)
         return data
-    
+
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
 
@@ -90,7 +83,7 @@ class ToTensor(object):
         target = target.transpose((0, 1))
         return {'image': torch.from_numpy(image).float(),
                 'target': torch.from_numpy(target).float()}
-    
+
 class RandomFlip(object):
 
     def __call__(self, sample):
@@ -108,7 +101,7 @@ class RandomCrop(object):
     """Crop randomly the image in a sample.
 
     Args:
-        output_size (tuple or int): Desired output size. If int, square crop
+        output_size (tuple or int): Desired output size. If int, square croplen(self.data_set)-1
             is made.
     """
 
@@ -136,18 +129,64 @@ class RandomCrop(object):
                       left: left + new_w]
         return {'image': image, 'target': target}
 
+class BallDatasetForVottAnnotation(BallDataset):
+    def __init__(self, json_file_list, root_dir_list, interval=1,transform=None):
+        super(BallDataset, self).__init__(3, interval, transform)
+        for i in range(len(json_file_list)):
+            json_file, root_dir = json_file_list[i], root_dir_list[i]
+            self.read_json(root_dir, json_file)
+        self.data_set.sort()
+
+    def read_json(self, root_dir, json_file):
+        with open(os.path.join(root_dir, json_file)) as f:
+            s = f.read()
+            j = json.loads(s)
+        # filepathとcenterだけ抽出してリスト化する
+        for idx, file_id in enumerate(j['assets']):
+            asset = j['assets'][file_id]['asset']
+            regions = j['assets'][file_id]['regions']
+            if regions:
+                for info in regions:
+                    # ballが写っていないフレームは無視する
+                    if 'ball' in info['tags']:
+                        bbox = info['boundingBox']
+                        self.data_set.append([os.path.join(root_dir, asset['name']), tuple(self.get_center(bbox['height'], bbox['width'], bbox['left'], bbox['top']))])
+                        break
+
+class BallDatasetForOpenTTGames(BallDataset):
+    def __init__(self, json_file, root_dir_list, interval=1,transform=None):
+        super(BallDatasetForOpenTTGames, self).__init__(9, interval, transform)
+        self.data_set = []
+        for root_dir in root_dir_list:
+            #self.read_json('/home/ishigen/Documents/ml/data/OpenTTGamesDataset/game_1/', 'ball_markup.json')
+            self.all_image.extend(sorted(list(glob.glob(root_dir+"image/*"))))
+            self.read_json(root_dir, json_file)
+
+    def read_json(self, root_dir, json_file):
+        with open(os.path.join(root_dir, json_file), 'r') as f:
+            s = f.read()
+            j = json.loads(s)
+        # filepathとcenterだけ抽出してリスト化する
+        for i in j.keys():
+            x, y = j[i]['x'], j[i]['y']
+            ball_positon = (y, x)
+            # ファイルパスの組み立て
+            file_path = root_dir + "image/{}.jpg".format(i.rjust(10, '0'))
+            self.data_set.append([file_path, ball_positon])
+
+
 def get_dataloader(batch_size):
     # local環境に合わせてるだけ。。。
-    ball_dataset = BallDataset(
-                            json_file_list=[
-                            'vott-json-export/test2-export.json',
-                            'vott-json-export/test1-export.json',
-                            ],
+    ball_dataset = BallDatasetForOpenTTGames(
+                            json_file='ball_markup.json',
                            root_dir_list=
-                            ['../data/DJI_0014/',
-                            '../data/DJI_0015/',
+                            ['/home/data/OpenTTGamesDataset/game_1/',
+                            '/home/data/OpenTTGamesDataset/game_2/',
+                            '/home/data/OpenTTGamesDataset/game_3/',
+                            '/home/data/OpenTTGamesDataset/game_4/',
+                            '/home/data/OpenTTGamesDataset/game_5/'
                             ],
-                           interval=4,
+                           interval=1,
                            transform=transforms.Compose([
                             RandomCrop((360, 640)),
                             RandomFlip(),
